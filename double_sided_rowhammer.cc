@@ -151,7 +151,7 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
     //printf("[!] done\n");
   }
   printf("Done\n");
-  uint64_t hammer_called = 0;
+
   // We should have some pages for most rows now.
   for (uint64_t row_index = 0; row_index + 2 < pages_per_row.size();
       ++row_index) {
@@ -186,8 +186,6 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
         std::pair<uint64_t, uint64_t> second_page_range(
             reinterpret_cast<uint64_t>(second_row_page),
             reinterpret_cast<uint64_t>(second_row_page+0x1000));
-        hammer_called++;
-        printf("HAMMER_CALLED: %ld", hammer_called);
         hammer(first_page_range, second_page_range, number_of_reads);
         // Now check the target pages.
         uint64_t number_of_bitflips_in_target = 0;
