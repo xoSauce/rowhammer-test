@@ -57,7 +57,7 @@ uint64_t number_of_seconds_to_hammer = 3600;
 
 // The number of memory reads to try.
 uint64_t number_of_reads = 1000*1024;
-
+double total_data_read = 0; // in GBs
 // Obtain the size of the physical memory of the system.
 uint64_t GetPhysicalMemorySize() {
   struct sysinfo info;
@@ -76,8 +76,8 @@ uint64_t GetPageFrameNumber(int pagemap, uint8_t* virtual_address) {
 }
 
 void SetupMapping(uint64_t* mapping_size, void** mapping) {
-  *mapping_size = 
-    static_cast<uint64_t>((static_cast<double>(GetPhysicalMemorySize()) * 
+  *mapping_size =
+    static_cast<uint64_t>((static_cast<double>(GetPhysicalMemorySize()) *
           fraction_of_physical_memory));
 
   *mapping = mmap(NULL, *mapping_size, PROT_READ | PROT_WRITE,
@@ -112,6 +112,7 @@ uint64_t HammerAddressesStandard(
         "clflush (%1);\n\t"
         : : "r" (first_pointer), "r" (second_pointer) : "memory");
   }
+  total_data_read += static_cast<double>(number_of_reads * 2 * 8 * 1e-9);
   return sum;
 }
 
@@ -120,10 +121,10 @@ typedef uint64_t(HammerFunction)(
     const std::pair<uint64_t, uint64_t>& second_range,
     uint64_t number_of_reads);
 
-// A comprehensive test that attempts to hammer adjacent rows for a given 
-// assumed row size (and assumptions of sequential physical addresses for 
+// A comprehensive test that attempts to hammer adjacent rows for a given
+// assumed row size (and assumptions of sequential physical addresses for
 // various rows.
-uint64_t HammerAllReachablePages(uint64_t presumed_row_size, 
+uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
     void* memory_mapping, uint64_t memory_mapping_size, HammerFunction* hammer,
     uint64_t number_of_reads) {
   // This vector will be filled with all the pages we can get access to for a
@@ -152,23 +153,23 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
   printf("Done\n");
 
   // We should have some pages for most rows now.
-  for (uint64_t row_index = 0; row_index + 2 < pages_per_row.size(); 
+  for (uint64_t row_index = 0; row_index + 2 < pages_per_row.size();
       ++row_index) {
-    if ((pages_per_row[row_index].size() != 64) || 
+    if ((pages_per_row[row_index].size() != 64) ||
         (pages_per_row[row_index+2].size() != 64)) {
       printf("[!] Can't hammer row %ld - only got %ld/%ld pages "
           "in the rows above/below\n",
-          row_index+1, pages_per_row[row_index].size(), 
+          row_index+1, pages_per_row[row_index].size(),
           pages_per_row[row_index+2].size());
       continue;
     } else if (pages_per_row[row_index+1].size() == 0) {
-      printf("[!] Can't hammer row %ld, got no pages from that row\n", 
+      printf("[!] Can't hammer row %ld, got no pages from that row\n",
           row_index+1);
       continue;
     }
-    printf("[!] Hammering rows %ld/%ld/%ld of %ld (got %ld/%ld/%ld pages)\n", 
-        row_index, row_index+1, row_index+2, pages_per_row.size(), 
-        pages_per_row[row_index].size(), pages_per_row[row_index+1].size(), 
+    printf("[!] Hammering rows %ld/%ld/%ld of %ld (got %ld/%ld/%ld pages)\n",
+        row_index, row_index+1, row_index+2, pages_per_row.size(),
+        pages_per_row[row_index].size(), pages_per_row[row_index+1].size(),
         pages_per_row[row_index+2].size());
     // Iterate over all pages we have for the first row.
     for (uint8_t* first_row_page : pages_per_row[row_index]) {
@@ -180,7 +181,7 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
         }
         // Now hammer the two pages we care about.
         std::pair<uint64_t, uint64_t> first_page_range(
-            reinterpret_cast<uint64_t>(first_row_page), 
+            reinterpret_cast<uint64_t>(first_row_page),
             reinterpret_cast<uint64_t>(first_row_page+0x1000));
         std::pair<uint64_t, uint64_t> second_page_range(
             reinterpret_cast<uint64_t>(second_row_page),
@@ -198,11 +199,13 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
         if (number_of_bitflips_in_target > 0) {
           printf("[!] Found %ld flips in row %ld (%lx to %lx) when hammering "
               "%lx and %lx\n", number_of_bitflips_in_target, row_index+1,
-              ((row_index+1)*presumed_row_size), 
+              ((row_index+1)*presumed_row_size),
               ((row_index+2)*presumed_row_size)-1,
-              GetPageFrameNumber(pagemap, first_row_page)*0x1000, 
+              GetPageFrameNumber(pagemap, first_row_page)*0x1000,
               GetPageFrameNumber(pagemap, second_row_page)*0x1000);
           total_bitflips += number_of_bitflips_in_target;
+          double current_avg = total_bitflips / total_data_read;
+          printf("[!]\n\tTotal bitflips: %ld\n\tTotal data read(GB): %f\n\tAverage bitflips per GB of accessed memory: %f\n\t", total_bitflips, total_data_read, current_avg);
         }
       }
     }
@@ -243,7 +246,7 @@ int main(int argc, char** argv) {
         fraction_of_physical_memory = atof(optarg);
         break;
       default:
-        fprintf(stderr, "Usage: %s [-t nsecs] [-p percent]\n", 
+        fprintf(stderr, "Usage: %s [-t nsecs] [-p percent]\n",
             argv[0]);
         exit(EXIT_FAILURE);
     }
