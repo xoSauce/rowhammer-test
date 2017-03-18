@@ -104,6 +104,7 @@ uint64_t HammerAddressesStandard(
       reinterpret_cast<uint64_t*>(second_range.first);
   uint64_t sum = 0;
 
+  total_data_read += static_cast<double>(number_of_reads * 2 * 8 * 1e-9);
   while (number_of_reads-- > 0) {
     sum += first_pointer[0];
     sum += second_pointer[0];
@@ -112,7 +113,6 @@ uint64_t HammerAddressesStandard(
         "clflush (%1);\n\t"
         : : "r" (first_pointer), "r" (second_pointer) : "memory");
   }
-  total_data_read += static_cast<double>(number_of_reads * 2 * 8 * 1e-9);
   return sum;
 }
 
@@ -205,7 +205,7 @@ uint64_t HammerAllReachablePages(uint64_t presumed_row_size,
               GetPageFrameNumber(pagemap, second_row_page)*0x1000);
           total_bitflips += number_of_bitflips_in_target;
           double current_avg = total_bitflips / total_data_read;
-          printf("[!]\n\tTotal bitflips: %ld\n\tTotal data read(GB): %f\n\tAverage bitflips per GB of accessed memory: %f\n\t", total_bitflips, total_data_read, current_avg);
+          printf("[!]\n\tTotal bitflips: %ld\n\tTotal data read(GB): %f\n\tAverage bitflips per GB of accessed memory: %f\n\t\n", total_bitflips, total_data_read, current_avg);
         }
       }
     }
